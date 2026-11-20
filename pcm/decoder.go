@@ -31,6 +31,8 @@ type Decoder struct {
 
 	audioStart   int64            // absolute byte offset of the first frame
 	streamEnd    int64            // absolute file size
+	base         int64            // absolute source offset of the stream's first byte (0 for a non-seekable source)
+	metaLen      int64            // bytes from the stream start to the first frame (the metadata region)
 	nominalBlock int              // STREAMINFO max block size; fixed-blocksize nominal
 	maxFrame     int              // STREAMINFO max frame size (0 unknown), seek-probe sizing
 	seekPoints   []meta.SeekPoint // parsed SEEKTABLE points (nil when absent); narrows seeks
@@ -189,12 +191,14 @@ func (d *Decoder) init(op string, r io.Reader) error {
 
 	// Reuse the owned read buffer (streamReadBlock) and the MD5 hash across streams. Both are
 	// nil on a zero-value (pooled) decoder, and br is nil after a failed seek
-	// (seekFailed), so fall back to construction in those cases.
+	// (seekFailed), so fall back to construction in those cases. The reader is
+	// seeded with base so BytesRead stays absolute for the life of the stream
+	// (Checkpoint and the seek paths rely on that); for a non-seekable source
+	// base is 0 and BytesRead counts from the stream's first byte.
 	if d.br == nil {
 		d.br = bitio.NewReaderSize(r, streamReadBlock)
-	} else {
-		d.br.Reset(r)
 	}
+	d.br.ResetAt(r, base)
 	if d.md5 == nil {
 		d.md5 = md5.New()
 	} else {
@@ -202,15 +206,17 @@ func (d *Decoder) init(op string, r io.Reader) error {
 	}
 
 	d.clearStream()
+	d.base = base
 
 	sm, err := meta.ReadMetadata(d.br)
 	if err != nil {
 		d.err = err // poisoned, but a later Reset clears this and recovers the decoder
 		return err
 	}
+	d.metaLen = d.br.BytesRead() - base
 
 	if seekable {
-		audioStart := base + d.br.BytesRead()
+		audioStart := d.br.BytesRead()             // absolute: br is seeded with base
 		resume, serr := rs.Seek(0, io.SeekCurrent) // read-ahead-advanced absolute file pos
 		var streamEnd int64
 		if serr == nil {
@@ -270,6 +276,8 @@ func (d *Decoder) clearStream() {
 	d.seekable = false
 	d.audioStart = 0
 	d.streamEnd = 0
+	d.base = 0
+	d.metaLen = 0
 	d.nominalBlock = 0
 	d.maxFrame = 0
 	d.seekPoints = nil

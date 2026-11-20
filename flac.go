@@ -39,6 +39,22 @@ var (
 	ErrSampleOutOfRange = errors.New("go-flac: decoded sample outside the frame bit depth")
 	// ErrInvalidSeek means SeekToSample was called with a negative sample index.
 	ErrInvalidSeek = errors.New("go-flac: invalid seek (negative sample index)")
+	// ErrCheckpointVersion means a decoder checkpoint was serialized by an
+	// incompatible checkpoint format version and cannot be resumed from.
+	ErrCheckpointVersion = errors.New("go-flac: unsupported checkpoint version")
+	// ErrCheckpointCorrupt means a decoder checkpoint is truncated or malformed.
+	// A truncated checkpoint also wraps io.ErrUnexpectedEOF.
+	ErrCheckpointCorrupt = errors.New("go-flac: corrupt checkpoint")
+	// ErrCheckpointMismatch means the source stream does not match the stream a
+	// checkpoint was taken on: the STREAMINFO fields, the MD5 signature, or the
+	// metadata region length differ, or the checkpoint offset falls outside the
+	// source's audio region. The source changed since the checkpoint, or the
+	// checkpoint belongs to another stream.
+	ErrCheckpointMismatch = errors.New("go-flac: checkpoint does not match the source stream")
+	// ErrCheckpointNotFrameBoundary means Decoder.Checkpoint was called while
+	// the decoder sits mid-frame (decoded samples remain unread), or a
+	// checkpoint's byte offset does not land on a frame sync in the source.
+	ErrCheckpointNotFrameBoundary = errors.New("go-flac: checkpoint not at a frame boundary")
 )
 
 // StreamInfo describes a FLAC stream's global properties, mirroring the

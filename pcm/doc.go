@@ -28,6 +28,28 @@
 //	dec, err := pcm.NewDecoder(r, pcm.WithConvertTo(16))
 //	// dec.OutputBitDepth() == 16, whatever dec.Info().BitDepth is
 //
+// # Checkpoints
+//
+// Decoder.Checkpoint serializes the decoder's position at a frame boundary
+// (the running MD5 state, the decoded-sample count, and the source byte
+// offset) into a small versioned byte slice, and NewDecoderFromCheckpoint
+// resumes decoding from it against a fresh source. A long decode can
+// therefore be suspended and continued later, possibly in another process,
+// without re-decoding from the start of the stream; the resumed decoder
+// yields exactly the PCM a continuous decode would have produced. The
+// checkpoint bytes are self-contained: the source reader and any file handle
+// are never serialized.
+//
+//	ck, err := dec.Checkpoint() // at a frame boundary: no unread samples
+//	// ... store ck, then later, in any process:
+//	resumed, err := pcm.NewDecoderFromCheckpoint(f, ck)
+//
+// Resuming requires a seekable source for the same stream. A truncated or
+// malformed checkpoint fails with flac.ErrCheckpointCorrupt, an incompatible
+// format version with flac.ErrCheckpointVersion, a source that no longer
+// matches the checkpoint's stream with flac.ErrCheckpointMismatch, and an
+// offset that is not a frame boundary with flac.ErrCheckpointNotFrameBoundary.
+//
 // # Encoding
 //
 // NewEncoder accepts an io.Writer (or io.WriteSeeker) and a Config. Provide an

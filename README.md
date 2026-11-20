@@ -64,6 +64,17 @@ reusable scratch buffer keeps steady-state per-block heap allocations near zero.
 negative sample index. Mid-stream resync from a non-fLaC start position remains
 future work.
 
+`Decoder.Checkpoint` captures the decode position at a frame boundary as a
+small versioned byte slice, and `NewDecoderFromCheckpoint` resumes from it
+against a fresh seekable source, in the same or another process, with PCM
+identical to a continuous decode. The checkpoint serializes decoder state and
+a byte offset only, never the source reader or a file handle. Resuming
+validates the stream identity, the frame offset, and the first frame's CRC,
+and reports a truncated or corrupt checkpoint (`ErrCheckpointCorrupt`), an
+incompatible format version (`ErrCheckpointVersion`), a changed source
+(`ErrCheckpointMismatch`), or a non-frame-boundary offset
+(`ErrCheckpointNotFrameBoundary`).
+
 ## Audio quality
 
 FLAC is lossless, so quality is not perceptual: every encode reproduces the
